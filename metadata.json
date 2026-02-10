@@ -1,0 +1,7 @@
+{
+  "name": "EVA - Sua Secretária Virtual Inteligente",
+  "description": "Uma plataforma SaaS completa para empresários, estudantes e profissionais autônomos organizarem tarefas, projetos e rotinas com o auxílio da IA EVA.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
