@@ -20,6 +20,10 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
   const [viewingEmployeeTasks, setViewingEmployeeTasks] = useState<Employee | null>(null);
   
+  // Task Tab Filters
+  const [taskStatusFilter, setTaskStatusFilter] = useState<'all' | 'pending' | 'completed'>('all');
+  const [taskSortOrder, setTaskSortOrder] = useState<'near' | 'far'>('near');
+
   // Custom dropdown for assignee search
   const [isAssigneeDropdownOpen, setIsAssigneeDropdownOpen] = useState(false);
   const assigneeDropdownRef = useRef<HTMLDivElement>(null);
@@ -79,6 +83,16 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
 
   // Auxiliares
   const getEmployeeTasks = (name: string) => tasks.filter(t => t.assignee === name);
+
+  // Date Parsing for sorting
+  // FIX: Ensure parseDate always returns a number for safe arithmetic operations
+  const parseDate = (dateStr: string): number => {
+    if (!dateStr) return 8640000000000000; // Far future timestamp
+    const [day, month, year] = dateStr.split('/').map(Number);
+    const date = new Date(year, month - 1, day);
+    const time = date.getTime();
+    return isNaN(time) ? 8640000000000000 : time;
+  };
 
   // Funções de Máscara
   const maskDate = (valor: string) => {
@@ -279,6 +293,28 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
     return list.filter(item => item.name.toLowerCase().includes(search));
   }, [employees, newTaskData.assignee, isAssigneeDropdownOpen]);
 
+  // FINAL FILTERED AND SORTED TASKS
+  const processedTasks = useMemo(() => {
+    let result = tasks.filter(t => 
+      t.title.toLowerCase().includes(taskSearch.toLowerCase()) || 
+      (t.assignee === 'me' ? 'você' : t.assignee).toLowerCase().includes(taskSearch.toLowerCase())
+    );
+
+    if (taskStatusFilter === 'pending') {
+      result = result.filter(t => t.status !== 'completed');
+    } else if (taskStatusFilter === 'completed') {
+      result = result.filter(t => t.status === 'completed');
+    }
+
+    result.sort((a, b) => {
+      const dateA = parseDate(a.deadline || '');
+      const dateB = parseDate(b.deadline || '');
+      return taskSortOrder === 'near' ? dateA - dateB : dateB - dateA;
+    });
+
+    return result;
+  }, [tasks, taskSearch, taskStatusFilter, taskSortOrder]);
+
   return (
     <div className="flex h-screen bg-[#0a0f1a] overflow-hidden text-slate-100 font-sans relative">
       <Sidebar 
@@ -344,38 +380,83 @@ const Dashboard = ({ user, onLogout }: DashboardProps) => {
                         />
                       </div>
                     </div>
-                    <button onClick={() => { setEditingTaskId(null); setNewTaskData({ title: '', assignee: 'me', priority: 'medium', deadline: '', time: '', location: '' }); setIsTaskModalOpen(true); }} className="eva-gradient text-white px-8 py-4 rounded-2xl font-black text-xs shadow-xl active:scale-95 transition-all w-full md:w-auto">NOVO COMPROMISSO</button>
+                    <button onClick={() => { setEditingTaskId(null); setNewTaskData({ title: '', assignee: 'me', priority: 'medium', deadline: '', time: '', location: '' }); setIsTaskModalOpen(true); }} className="eva-gradient text-white px-8 py-4 rounded-2xl font-black text-xs shadow-xl active:scale-95 transition-all w-full md:w-auto uppercase tracking-widest">Novo Compromisso</button>
+                  </div>
+
+                  {/* CRONOLOGIA E STATUS FILTERS */}
+                  <div className="flex flex-wrap gap-4 items-center bg-[#111827]/40 p-4 rounded-3xl border border-white/5 backdrop-blur-md">
+                     <div className="flex gap-1.5 p-1.5 bg-black/20 rounded-2xl border border-white/5">
+                        <button 
+                          onClick={() => setTaskStatusFilter('all')}
+                          className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${taskStatusFilter === 'all' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                        >Todas</button>
+                        <button 
+                          onClick={() => setTaskStatusFilter('pending')}
+                          className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${taskStatusFilter === 'pending' ? 'bg-amber-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                        >Pendentes</button>
+                        <button 
+                          onClick={() => setTaskStatusFilter('completed')}
+                          className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${taskStatusFilter === 'completed' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                        >Concluídas</button>
+                     </div>
+
+                     <div className="h-8 w-[1px] bg-white/5 hidden md:block"></div>
+
+                     <div className="flex gap-1.5 p-1.5 bg-black/20 rounded-2xl border border-white/5">
+                        <button 
+                          onClick={() => setTaskSortOrder('near')}
+                          className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${taskSortOrder === 'near' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                        >
+                          <i className="fas fa-arrow-down-short-wide mr-2"></i> Próximas
+                        </button>
+                        <button 
+                          onClick={() => setTaskSortOrder('far')}
+                          className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${taskSortOrder === 'far' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                        >
+                          <i className="fas fa-arrow-up-wide-short mr-2"></i> Distantes
+                        </button>
+                     </div>
+
+                     <div className="ml-auto px-4 text-[9px] font-black text-slate-700 uppercase tracking-widest italic">
+                        {processedTasks.length} {processedTasks.length === 1 ? 'item' : 'itens'} filtrados
+                     </div>
                   </div>
 
                   <div className="grid gap-4">
-                    {tasks.filter(t => 
-                      t.title.toLowerCase().includes(taskSearch.toLowerCase()) || 
-                      (t.assignee === 'me' ? 'você' : t.assignee).toLowerCase().includes(taskSearch.toLowerCase())
-                    ).map(t => (
-                      <div key={t.id} className={`bg-[#111827]/40 p-5 md:p-6 rounded-[2rem] border border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-6 transition-all hover:border-blue-500/20 group ${t.status === 'completed' ? 'opacity-40 grayscale' : 'shadow-2xl'}`}>
-                        <div className="flex items-center gap-4">
-                          <button onClick={() => setTasks(tasks.map(x => x.id === t.id ? {...x, status: x.status === 'completed' ? 'pending' : 'completed'} : x))} className={`shrink-0 w-10 h-10 rounded-xl border-2 flex items-center justify-center transition-all ${t.status === 'completed' ? 'bg-blue-600 border-blue-600 shadow-[0_0_15px_#3b82f644]' : 'border-white/10 hover:border-blue-500'}`}>
-                            {t.status === 'completed' && <i className="fas fa-check text-[10px] text-white"></i>}
-                          </button>
-                          <div className="space-y-1">
-                            <h4 className={`text-base md:text-lg font-bold leading-tight ${t.status === 'completed' ? 'line-through text-slate-500' : 'text-white'}`}>{t.title}</h4>
-                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-[9px] font-black uppercase tracking-widest text-slate-500">
-                              <span className={t.assignee === 'me' ? 'text-blue-500' : 'text-amber-500'}>{t.assignee === 'me' ? 'VOCÊ' : t.assignee}</span>
-                              {t.deadline && <span><i className="far fa-calendar mr-1"></i> {t.deadline}</span>}
-                              {t.time && <span><i className="far fa-clock mr-1"></i> {t.time}</span>}
+                    {processedTasks.length === 0 ? (
+                      <div className="py-20 text-center flex flex-col items-center justify-center space-y-4">
+                         <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center text-slate-800 text-2xl">
+                           <i className="fas fa-calendar-xmark"></i>
+                         </div>
+                         <p className="text-slate-600 font-black uppercase tracking-[0.3em] text-[10px]">Nenhum compromisso encontrado para este filtro.</p>
+                      </div>
+                    ) : (
+                      processedTasks.map(t => (
+                        <div key={t.id} className={`bg-[#111827]/40 p-5 md:p-6 rounded-[2rem] border border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-6 transition-all hover:border-blue-500/20 group ${t.status === 'completed' ? 'opacity-40 grayscale' : 'shadow-2xl'}`}>
+                          <div className="flex items-center gap-4">
+                            <button onClick={() => setTasks(tasks.map(x => x.id === t.id ? {...x, status: x.status === 'completed' ? 'pending' : 'completed'} : x))} className={`shrink-0 w-10 h-10 rounded-xl border-2 flex items-center justify-center transition-all ${t.status === 'completed' ? 'bg-blue-600 border-blue-600 shadow-[0_0_15px_#3b82f644]' : 'border-white/10 hover:border-blue-500'}`}>
+                              {t.status === 'completed' && <i className="fas fa-check text-[10px] text-white"></i>}
+                            </button>
+                            <div className="space-y-1">
+                              <h4 className={`text-base md:text-lg font-bold leading-tight ${t.status === 'completed' ? 'line-through text-slate-500' : 'text-white'}`}>{t.title}</h4>
+                              <div className="flex flex-wrap gap-x-4 gap-y-1 text-[9px] font-black uppercase tracking-widest text-slate-500">
+                                <span className={t.assignee === 'me' ? 'text-blue-500' : 'text-amber-500'}>{t.assignee === 'me' ? 'VOCÊ' : t.assignee}</span>
+                                {t.deadline && <span className={parseDate(t.deadline) < Date.now() && t.status !== 'completed' ? 'text-rose-500' : ''}><i className="far fa-calendar mr-1"></i> {t.deadline}</span>}
+                                {t.time && <span><i className="far fa-clock mr-1"></i> {t.time}</span>}
+                              </div>
                             </div>
                           </div>
+                          <div className="flex gap-2 self-end md:self-auto">
+                            <button onClick={() => openEditTask(t)} className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-slate-600 hover:text-blue-400 transition-all">
+                               <i className="fas fa-edit"></i>
+                            </button>
+                            <button onClick={() => setTasks(tasks.filter(x => x.id !== t.id))} className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-slate-600 hover:text-rose-500 transition-all">
+                               <i className="fas fa-trash-alt"></i>
+                            </button>
+                          </div>
                         </div>
-                        <div className="flex gap-2 self-end md:self-auto">
-                          <button onClick={() => openEditTask(t)} className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-slate-600 hover:text-blue-400 transition-all">
-                             <i className="fas fa-edit"></i>
-                          </button>
-                          <button onClick={() => setTasks(tasks.filter(x => x.id !== t.id))} className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-slate-600 hover:text-rose-500 transition-all">
-                             <i className="fas fa-trash-alt"></i>
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                      ))
+                    )}
                   </div>
                </div>
             </div>
